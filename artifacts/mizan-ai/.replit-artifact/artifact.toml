@@ -1,0 +1,28 @@
+kind = "web"
+previewPath = "/"
+title = "MIZAN AI"
+description = "An Arabic-first personal finance platform with secure accounts, transaction tracking, budgets, savings goals, bills, and transparent AI-style financial guidance backed by each user's real MongoDB data."
+version = "1.0.0"
+id = "artifacts/mizan-ai"
+router = "path"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 24764
+
+[services.development]
+run = "pnpm --filter @workspace/mizan-ai run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/mizan-ai", "run", "build" ]
+serve = "static"
+publicDir = "artifacts/mizan-ai/dist/public"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "24764"
+BASE_PATH = "/"

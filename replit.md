@@ -1,44 +1,54 @@
-# [Project name]
+# MIZAN AI
 
-_Replace the heading above with the project's name, and this line with one sentence describing what this app does for users._
+MIZAN AI is an Arabic-first personal finance platform for tracking transactions, budgets, savings goals, and recorded bills using each user's own data.
 
 ## Run & Operate
 
-- `pnpm --filter @workspace/api-server run dev` — run the API server (port 5000)
+- `pnpm --filter @workspace/api-server run dev` — run the API server
+- `pnpm --filter @workspace/mizan-ai run dev` — run the web app
 - `pnpm run typecheck` — full typecheck across all packages
 - `pnpm run build` — typecheck + build all packages
 - `pnpm --filter @workspace/api-spec run codegen` — regenerate API hooks and Zod schemas from the OpenAPI spec
-- `pnpm --filter @workspace/db run push` — push DB schema changes (dev only)
-- Required env: `DATABASE_URL` — Postgres connection string
+- Required Replit Secrets: `MONGODB_URI`, `SESSION_SECRET`
+- Optional environment variable: `MONGODB_DATABASE` (defaults to `mizan_ai`)
 
 ## Stack
 
 - pnpm workspaces, Node.js 24, TypeScript 5.9
 - API: Express 5
-- DB: PostgreSQL + Drizzle ORM
+- DB: MongoDB Atlas using the official MongoDB Node.js driver
 - Validation: Zod (`zod/v4`), `drizzle-zod`
 - API codegen: Orval (from OpenAPI spec)
 - Build: esbuild (CJS bundle)
 
 ## Where things live
 
-_Populate as you build — short repo map plus pointers to the source-of-truth file for DB schema, API contracts, theme files, etc._
+- `artifacts/mizan-ai/` — Arabic-first React/Vite web app
+- `artifacts/api-server/src/routes/mizan.ts` — authenticated finance and profile API
+- `artifacts/api-server/src/lib/mongo.ts` — MongoDB connection and document types
+- `artifacts/api-server/src/lib/auth.ts` — signed HTTP-only session cookies
+- `lib/api-spec/openapi.yaml` — source of truth for API contracts and generated clients
 
 ## Architecture decisions
 
-_Populate as you build — non-obvious choices a reader couldn't infer from the code (3-5 bullets)._
+- Financial totals and advice use each signed-in user's stored transactions; no sample balances are included.
+- The advisor uses transparent deterministic rules and does not require a paid AI service.
+- Authentication uses bcryptjs and a signed token in an HTTP-only cookie because the requirements explicitly request password-based accounts.
 
 ## Product
 
-_Describe the high-level user-facing capabilities of this app once they exist._
+- Landing page, registration, login, dashboard, transactions, budgets, savings goals, financial advisor, bills/payments, and profile.
+- Arabic RTL interface with KWD currency formatting.
 
 ## User preferences
 
-_Populate as you build — explicit user instructions worth remembering across sessions._
+- Keep the app Arabic-first with RTL support and Kuwaiti dinar formatting.
+- Do not use invented amounts in financial calculations.
 
 ## Gotchas
 
-_Populate as you build — sharp edges, "always run X before Y" rules._
+- Configure both `MONGODB_URI` and `SESSION_SECRET` in Replit Secrets before using account or finance endpoints.
+- Backend route changes must remain consistent with `lib/api-spec/openapi.yaml`; regenerate clients after spec edits.
 
 ## Pointers
 
