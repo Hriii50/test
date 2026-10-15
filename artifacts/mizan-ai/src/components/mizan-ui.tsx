@@ -72,16 +72,16 @@ export function Modal({ open, title, onClose, children }: { open: boolean; title
   </div>;
 }
 
-export function Field({ label, name, value, onChange, type = 'text', required = true, placeholder, min, minLength, step, options, testId }: {
+export function Field({ label, name, value, onChange, type = 'text', required = true, placeholder, min, minLength, step, options, testId, autoComplete }: {
   label: string; name: string; value: string; onChange: (value: string) => void; type?: string; required?: boolean;
-  placeholder?: string; min?: string; step?: string; minLength?: number; options?: string[]; testId?: string;
+  placeholder?: string; min?: string; step?: string; minLength?: number; options?: string[]; testId?: string; autoComplete?: string;
 }) {
   const common = { id: name, name, required, value, 'data-testid': testId || `input-${name}`, onChange: (e: ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => onChange(e.target.value), className: 'mt-2 min-h-11 w-full rounded-xl border border-input bg-card px-3.5 text-sm text-foreground outline-none transition placeholder:text-muted-foreground/70 focus:border-emerald-700 focus:ring-2 focus:ring-emerald-700/10' };
   const optionLabels: Record<string, string> = { expense: 'مصروف', income: 'دخل', pending: 'معلّق', paid: 'مدفوع' };
   return <label htmlFor={name} className="block text-sm font-medium text-secondary">{label}
     {options ? <select {...common}>{options.map((o) => <option value={o} key={o}>{optionLabels[o] || o}</option>)}</select>
       : type === 'textarea' ? <textarea {...common} rows={3} placeholder={placeholder} />
-        : <input {...common} type={type} min={min} step={step} minLength={minLength} placeholder={placeholder} />}
+        : <input {...common} type={type} autoComplete={autoComplete} min={min} step={step} minLength={minLength} placeholder={placeholder} />}
   </label>;
 }
 

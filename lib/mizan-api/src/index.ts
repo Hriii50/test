@@ -57,6 +57,11 @@ type SafeSchema<T> = {
     | { success: false; error: { message: string } };
 };
 
+type MizanApiDependencies = {
+  getDatabase: typeof getDatabase;
+  issueSession: typeof issueSession;
+};
+
 function json(body: unknown, status = 200, cookie?: string): Response {
   const headers = new Headers({ "Content-Type": "application/json; charset=utf-8" });
   if (cookie) headers.set("Set-Cookie", cookie);
@@ -65,6 +70,17 @@ function json(body: unknown, status = 200, cookie?: string): Response {
 
 function error(message: string, status: number): Response {
   return json({ error: message }, status);
+}
+
+function redirect(location: string, cookie?: string): Response {
+  const headers = new Headers({ Location: location });
+  if (cookie) headers.set("Set-Cookie", cookie);
+  return new Response(null, { status: 303, headers });
+}
+
+function isFormPost(request: Request): boolean {
+  return request.headers.get("content-type")?.split(";", 1)[0].trim().toLowerCase()
+    === "application/x-www-form-urlencoded";
 }
 
 async function parseInput<T>(
@@ -82,9 +98,11 @@ async function parseInput<T>(
     if (new TextEncoder().encode(raw).byteLength > 32 * 1024) {
       return { response: error("حجم الطلب أكبر من المسموح", 413) };
     }
-    value = JSON.parse(raw);
+    value = isFormPost(request)
+      ? Object.fromEntries(new URLSearchParams(raw).entries())
+      : JSON.parse(raw);
   } catch {
-    return { response: error("بيانات JSON غير صالحة", 400) };
+    return { response: error("بيانات الطلب غير صالحة", 400) };
   }
 
   const parsed = schema.safeParse(value);
@@ -145,7 +163,11 @@ function validatedId(
   return parsed.success && ObjectId.isValid(parsed.data.id) ? parsed.data.id : null;
 }
 
-async function handlePublicRoute(request: Request, path: string): Promise<Response | null> {
+async function handlePublicRoute(
+  request: Request,
+  path: string,
+  dependencies: MizanApiDependencies,
+): Promise<Response | null> {
   const method = request.method.toUpperCase();
 
   if (method === "GET" && path === "/healthz") {
@@ -156,11 +178,13 @@ async function handlePublicRoute(request: Request, path: string): Promise<Respon
     const parsed = await parseInput(request, RegisterUserBody);
     if ("response" in parsed) return parsed.response;
 
-    const db = await getDatabase();
+    const db = await dependencies.getDatabase();
     const email = parsed.data.email.trim().toLowerCase();
     const users = db.collection<UserDocument>("users");
     if (await users.findOne({ email })) {
-      return error("البريد الإلكتروني مستخدم بالفعل", 409);
+      return isFormPost(request)
+        ? redirect("/signup?authError=duplicate")
+        : error("البريد الإلكتروني مستخدم بالفعل", 409);
     }
 
     const user: UserDocument = {
@@ -172,25 +196,33 @@ async function handlePublicRoute(request: Request, path: string): Promise<Respon
       createdAt: dateNow(),
     };
     await users.insertOne(user);
-    const token = await issueSession(String(user._id));
-    return json(RegisterUserResponse.parse({ user: asUser(user) }), 201, sessionCookie(token));
+    const token = await dependencies.issueSession(String(user._id));
+    const cookie = sessionCookie(token);
+    return isFormPost(request)
+      ? redirect("/dashboard", cookie)
+      : json(RegisterUserResponse.parse({ user: asUser(user) }), 201, cookie);
   }
 
   if (method === "POST" && path === "/auth/login") {
     const parsed = await parseInput(request, LoginUserBody);
     if ("response" in parsed) return parsed.response;
 
-    const db = await getDatabase();
+    const db = await dependencies.getDatabase();
     const user = await db.collection<UserDocument>("users").findOne({
       email: parsed.data.email.trim().toLowerCase(),
     });
     const valid = user ? await bcrypt.compare(parsed.data.password, user.passwordHash) : false;
     if (!user || !valid) {
-      return error("البريد الإلكتروني أو كلمة المرور غير صحيحة", 401);
+      return isFormPost(request)
+        ? redirect("/login?authError=invalid")
+        : error("البريد الإلكتروني أو كلمة المرور غير صحيحة", 401);
     }
 
-    const token = await issueSession(String(user._id));
-    return json(LoginUserResponse.parse({ user: asUser(user) }), 200, sessionCookie(token));
+    const token = await dependencies.issueSession(String(user._id));
+    const cookie = sessionCookie(token);
+    return isFormPost(request)
+      ? redirect("/dashboard", cookie)
+      : json(LoginUserResponse.parse({ user: asUser(user) }), 200, cookie);
   }
 
   if (method === "POST" && path === "/auth/logout") {
@@ -204,9 +236,10 @@ async function handleAuthenticatedRoute(
   request: Request,
   path: string,
   userId: string,
+  dependencies: MizanApiDependencies,
 ): Promise<Response> {
   const method = request.method.toUpperCase();
-  const db = await getDatabase();
+  const db = await dependencies.getDatabase();
 
   if (method === "GET" && path === "/auth/me") {
     const user = await db.collection<UserDocument>("users").findOne({ _id: new ObjectId(userId) });
@@ -551,27 +584,37 @@ async function handleAuthenticatedRoute(
   return error("المسار غير موجود", 404);
 }
 
-export async function handleMizanApi(request: Request): Promise<Response> {
-  try {
-    const path = normalizePath(new URL(request.url).pathname);
-    const publicResponse = await handlePublicRoute(request, path);
-    if (publicResponse) return publicResponse;
+export function createMizanApiHandler(overrides: Partial<MizanApiDependencies> = {}) {
+  const dependencies: MizanApiDependencies = {
+    getDatabase,
+    issueSession,
+    ...overrides,
+  };
 
-    const session = await getSessionUserId(request);
-    if (!session.userId) {
-      return json(
-        { error: session.invalid ? "انتهت صلاحية الجلسة" : "تسجيل الدخول مطلوب" },
-        401,
-        session.invalid ? clearedSessionCookie() : undefined,
-      );
-    }
+  return async function handleMizanApi(request: Request): Promise<Response> {
+    try {
+      const path = normalizePath(new URL(request.url).pathname);
+      const publicResponse = await handlePublicRoute(request, path, dependencies);
+      if (publicResponse) return publicResponse;
 
-    const response = await handleAuthenticatedRoute(request, path, session.userId);
-    if (path === "/auth/me" && response.status === 401) {
-      return json({ error: "الحساب غير موجود" }, 401, clearedSessionCookie());
+      const session = await getSessionUserId(request);
+      if (!session.userId) {
+        return json(
+          { error: session.invalid ? "انتهت صلاحية الجلسة" : "تسجيل الدخول مطلوب" },
+          401,
+          session.invalid ? clearedSessionCookie() : undefined,
+        );
+      }
+
+      const response = await handleAuthenticatedRoute(request, path, session.userId, dependencies);
+      if (path === "/auth/me" && response.status === 401) {
+        return json({ error: "الحساب غير موجود" }, 401, clearedSessionCookie());
+      }
+      return response;
+    } catch {
+      return error("حدث خطأ غير متوقع. حاول مرة أخرى.", 500);
     }
-    return response;
-  } catch {
-    return error("حدث خطأ غير متوقع. حاول مرة أخرى.", 500);
-  }
+  };
 }
+
+export const handleMizanApi = createMizanApiHandler();

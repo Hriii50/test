@@ -1,0 +1,1 @@
+- [MIZAN auth credential logging](mizan-auth-credential-logging.md) — Never put auth fields in URLs or request logs; sign-in and sign-up must use POST bodies.

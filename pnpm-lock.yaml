@@ -655,6 +655,9 @@ importers:
       '@types/node':
         specifier: 'catalog:'
         version: 25.9.6
+      tsx:
+        specifier: 4.23.13
+        version: 4.23.13
 
   scripts:
     devDependencies:

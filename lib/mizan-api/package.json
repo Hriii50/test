@@ -6,6 +6,9 @@
   "exports": {
     ".": "./src/index.ts"
   },
+  "scripts": {
+    "test": "tsx --test test/*.test.mjs"
+  },
   "dependencies": {
     "@workspace/api-zod": "workspace:*",
     "bcryptjs": "^3.0.3",
@@ -13,6 +16,7 @@
     "mongodb": "^7.7.0"
   },
   "devDependencies": {
-    "@types/node": "catalog:"
+    "@types/node": "catalog:",
+    "tsx": "4.23.13"
   }
 }

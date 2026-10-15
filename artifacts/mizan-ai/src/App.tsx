@@ -1,6 +1,6 @@
 'use client';
 
-import { type FormEvent, type ReactNode, useMemo, useState } from 'react';
+import { type FormEvent, type ReactNode, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { QueryClient, QueryClientProvider, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -40,6 +40,12 @@ const today = () => new Date().toISOString().slice(0, 10);
 const thisMonth = () => new Date().toISOString().slice(0, 7);
 const dateLabel = (date?: string | null) => date ? new Intl.DateTimeFormat('ar-KW', { day: 'numeric', month: 'short', year: 'numeric' }).format(new Date(date)) : 'غير محدد';
 const percent = (n: number) => `${Math.round(n)}٪`;
+
+function apiErrorStatus(cause: unknown): number | null {
+  if (typeof cause !== 'object' || cause === null || !('status' in cause)) return null;
+  const status = (cause as { status?: unknown }).status;
+  return typeof status === 'number' ? status : null;
+}
 
 function useLocation(): [string, (path: string) => void] {
   const pathname = usePathname() || '/';
@@ -96,19 +102,58 @@ function AuthPage({ mode }: { mode: 'login' | 'signup' }) {
   const login = useMutation(getLoginUserMutationOptions({ request }));
   const queryClient = useQueryClient();
   const busy = mode === 'signup' ? register.isPending : login.isPending;
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const errorCode = params.get('authError');
+
+    if (params.has('password') || params.has('email') || params.has('name')) {
+      params.delete('password');
+      params.delete('email');
+      params.delete('name');
+      const query = params.toString();
+      window.history.replaceState(
+        null,
+        '',
+        `${window.location.pathname}${query ? `?${query}` : ''}${window.location.hash}`,
+      );
+    }
+
+    if (mode === 'login' && errorCode === 'invalid') {
+      setError('البريد الإلكتروني أو كلمة المرور غير صحيحة');
+    } else if (mode === 'signup' && errorCode === 'duplicate') {
+      setError('البريد الإلكتروني مستخدم بالفعل');
+    }
+  }, [mode]);
   const submit = (e: FormEvent) => {
     e.preventDefault(); setError('');
-    const options = { onSuccess: (res: { user: User }) => { queryClient.setQueryData(getGetCurrentUserQueryKey(), res.user); setLocation('/dashboard'); }, onError: () => setError('تعذّر إتمام تسجيل الدخول. تحقّق من بياناتك وحاول مجدداً.') };
+    const options = {
+      onSuccess: (res: { user: User }) => {
+        queryClient.setQueryData(getGetCurrentUserQueryKey(), res.user);
+        setLocation('/dashboard');
+      },
+      onError: (cause: unknown) => {
+        const status = apiErrorStatus(cause);
+        if (mode === 'login' && status === 401) {
+          setError('البريد الإلكتروني أو كلمة المرور غير صحيحة');
+        } else if (mode === 'signup' && status === 409) {
+          setError('البريد الإلكتروني مستخدم بالفعل');
+        } else {
+          setError(mode === 'login'
+            ? 'تعذّر تسجيل الدخول الآن. تحقق من اتصالك وحاول مرة أخرى.'
+            : 'تعذّر إنشاء الحساب الآن. حاول مرة أخرى.');
+        }
+      },
+    };
     if (mode === 'signup') register.mutate({ data: { name: name.trim(), email: email.trim(), password } }, options);
     else login.mutate({ data: { email: email.trim(), password } }, options);
   };
   return <main dir="rtl" className="grid min-h-[100dvh] bg-background lg:grid-cols-[1fr_.88fr]">
     <section className="relative hidden overflow-hidden bg-secondary p-12 text-white lg:flex lg:flex-col lg:justify-between"><BrandMark size="large" /><div className="relative z-10 max-w-xl pb-16"><div className="mb-4 flex items-center gap-2 text-xs font-semibold text-amber-200"><Sparkles size={15} /> مساحتك تبدأ منك</div><h1 className="text-5xl font-semibold leading-tight">خطوة أقرب<br />إلى <span className="text-emerald-300">صورة أوضح.</span></h1><p className="mt-5 max-w-md text-sm leading-7 text-white/60">مساحة هادئة لتسجيل ما يهمّك مالياً ومتابعة ما تخطط له، ببياناتك أنت.</p><div className="mt-9 flex items-center gap-3 rounded-2xl border border-white/10 bg-white/5 p-4"><ShieldCheck className="text-emerald-300" size={20} /><span className="text-xs leading-5 text-white/70">حسابك وبياناتك المالية في مساحة خاصة بك.</span></div></div><div className="absolute -left-24 bottom-10 size-80 rounded-full border border-white/10" /><div className="absolute -left-5 bottom-28 size-48 rounded-full border border-amber-200/10" /><div className="text-[10px] tracking-[.2em] text-white/35">MIZAN · FINANCIAL CLARITY</div></section>
     <section className="flex items-center justify-center px-5 py-10 sm:px-10"><div className="w-full max-w-md page-enter"><div className="mb-10 lg:hidden"><BrandMark size="large" /></div><Link href="/" className="mb-8 inline-flex items-center gap-2 text-xs text-muted-foreground hover:text-secondary"><ArrowLeft size={14} /> العودة للرئيسية</Link><p className="text-xs font-semibold text-emerald-800">{mode === 'signup' ? 'مساحة جديدة، لك وحدك' : 'سعداء بعودتك'}</p><h2 className="mt-2 text-3xl font-semibold text-secondary">{mode === 'signup' ? 'أنشئ حسابك' : 'تسجيل الدخول'}</h2><p className="mt-2 text-sm leading-6 text-muted-foreground">{mode === 'signup' ? 'ابدأ بمساحة مالية شخصية وآمنة.' : 'ادخل إلى مساحتك المالية.'}</p>
-        <form onSubmit={submit} className="mt-8 space-y-5" data-testid={`form-${mode}`}>
-          {mode === 'signup' && <Field label="الاسم" name="name" value={name} onChange={setName} placeholder="اسمك الكامل" />}
-          <Field label="البريد الإلكتروني" name="email" type="email" value={email} onChange={setEmail} placeholder="name@example.com" />
-          <div className="relative"><Field label="كلمة المرور" name="password" type={showPassword ? 'text' : 'password'} minLength={8} value={password} onChange={setPassword} placeholder="٨ أحرف على الأقل" /><button type="button" aria-label={showPassword ? 'إخفاء كلمة المرور' : 'إظهار كلمة المرور'} data-testid="button-toggle-password" onClick={() => setShowPassword(!showPassword)} className="absolute left-3 top-[38px] rounded-md p-1.5 text-muted-foreground hover:bg-muted">{showPassword ? <EyeOff size={17} /> : <Eye size={17} />}</button></div>
+        <form method="post" action={mode === 'signup' ? '/api/auth/register' : '/api/auth/login'} onSubmit={submit} className="mt-8 space-y-5" data-testid={`form-${mode}`}>
+          {mode === 'signup' && <Field label="الاسم" name="name" value={name} onChange={setName} placeholder="اسمك الكامل" autoComplete="name" />}
+          <Field label="البريد الإلكتروني" name="email" type="email" value={email} onChange={setEmail} placeholder="name@example.com" autoComplete="email" />
+          <div className="relative"><Field label="كلمة المرور" name="password" type={showPassword ? 'text' : 'password'} minLength={8} value={password} onChange={setPassword} placeholder="٨ أحرف على الأقل" autoComplete={mode === 'signup' ? 'new-password' : 'current-password'} /><button type="button" aria-label={showPassword ? 'إخفاء كلمة المرور' : 'إظهار كلمة المرور'} data-testid="button-toggle-password" onClick={() => setShowPassword(!showPassword)} className="absolute left-3 top-[38px] rounded-md p-1.5 text-muted-foreground hover:bg-muted">{showPassword ? <EyeOff size={17} /> : <Eye size={17} />}</button></div>
           {error && <p className="rounded-xl bg-red-50 p-3 text-sm text-red-800" role="alert" data-testid="status-auth-error">{error}</p>}
           <Button type="submit" className="w-full" disabled={busy} testId="button-auth-submit">{busy ? 'جارٍ التحقق…' : mode === 'signup' ? 'إنشاء الحساب' : 'دخول إلى حسابي'}<ArrowLeft size={16} /></Button>
         </form><div className="mt-7 border-t border-border pt-6 text-center text-sm text-muted-foreground">{mode === 'signup' ? 'لديك حساب بالفعل؟' : 'ليس لديك حساب؟'} <Link href={mode === 'signup' ? '/login' : '/signup'} className="font-semibold text-emerald-800 hover:underline" data-testid="link-auth-switch">{mode === 'signup' ? 'سجّل الدخول' : 'أنشئ حساباً'}</Link></div><p className="mt-8 text-center text-[11px] leading-5 text-muted-foreground">باستخدام ميزان، يمكنك تنظيم المعلومات التي تختار تدوينها فقط.</p></div></section>
@@ -119,9 +164,9 @@ function Guarded({ children }: { children: (user: User) => ReactNode }) {
   const [, setLocation] = useLocation();
   const queryClient = useQueryClient();
   const { data: user, isLoading, isError, refetch } = useGetCurrentUser({ request });
+  const logout = useMutation(getLogoutUserMutationOptions({ request }));
   if (isLoading) return <main dir="rtl" className="min-h-[100dvh] p-5 sm:p-10"><div className="mx-auto max-w-6xl"><LoadingState /></div></main>;
   if (isError || !user) return <main dir="rtl" className="grid min-h-[100dvh] place-items-center bg-background p-5"><Panel className="max-w-md p-8 text-center"><div className="mx-auto grid size-14 place-items-center rounded-2xl bg-emerald-50 text-emerald-800"><ShieldCheck size={25} /></div><h1 className="mt-4 text-xl font-bold text-secondary">مساحتك بانتظارك</h1><p className="mt-2 text-sm leading-6 text-muted-foreground">سجّل الدخول للوصول إلى بياناتك المالية الشخصية.</p><Link href="/login" className="mt-5 inline-flex min-h-11 items-center gap-2 rounded-xl bg-emerald-700 px-5 text-sm font-semibold text-white" data-testid="link-guard-login">تسجيل الدخول <ArrowLeft size={16} /></Link><button className="mt-3 block w-full text-xs text-muted-foreground underline" onClick={() => refetch()} data-testid="button-check-session">إعادة المحاولة</button></Panel></main>;
-  const logout = useMutation(getLogoutUserMutationOptions({ request }));
   return <Shell user={user} onLogout={() => logout.mutate(undefined, { onSuccess: () => { queryClient.clear(); setLocation('/login'); }, onError: () => setLocation('/login') })}>{children(user)}</Shell>;
 }
 

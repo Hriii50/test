@@ -16,6 +16,7 @@ router.use(async (req, res, next): Promise<void> => {
     headers.delete("transfer-encoding");
     const hasBody = !["GET", "HEAD"].includes(req.method.toUpperCase());
     const body = hasBody ? JSON.stringify(req.body ?? {}) : undefined;
+    if (hasBody) headers.set("content-type", "application/json");
     const request = new Request(
       new URL(`/api${req.url}`, `http://${req.get("host") ?? "localhost"}`),
       { method: req.method, headers, body },
