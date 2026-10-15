@@ -5,28 +5,35 @@ MIZAN AI is an Arabic-first personal finance platform for tracking transactions,
 ## Run & Operate
 
 - `pnpm --filter @workspace/api-server run dev` — run the API server
-- `pnpm --filter @workspace/mizan-ai run dev` — run the web app
+- `pnpm --filter @workspace/mizan-ai run dev` — run the Next.js app (UI and `/api/*` routes)
 - `pnpm run typecheck` — full typecheck across all packages
 - `pnpm run build` — typecheck + build all packages
 - `pnpm --filter @workspace/api-spec run codegen` — regenerate API hooks and Zod schemas from the OpenAPI spec
 - Required Replit Secrets: `MONGODB_URI`, `SESSION_SECRET`
 - Optional environment variable: `MONGODB_DATABASE` (defaults to `mizan_ai`)
 
+## Vercel deployment
+
+- Import the repository and set **Root Directory** to `artifacts/mizan-ai`.
+- Use the detected Next.js preset and default `next build` command.
+- Add `MONGODB_URI` and `SESSION_SECRET` in Vercel's environment settings; optionally set `MONGODB_DATABASE`.
+- The frontend and API are served by one Next.js deployment. The Express artifact remains only as a Replit compatibility adapter at `/legacy-api`.
+
 ## Stack
 
 - pnpm workspaces, Node.js 24, TypeScript 5.9
-- API: Express 5
+- Web and API: Next.js App Router / React
+- Replit compatibility API: Express 5, backed by the same shared request handler
 - DB: MongoDB Atlas using the official MongoDB Node.js driver
 - Validation: Zod (`zod/v4`), `drizzle-zod`
 - API codegen: Orval (from OpenAPI spec)
-- Build: esbuild (CJS bundle)
+- Build: Next.js and esbuild for the compatibility API
 
 ## Where things live
 
-- `artifacts/mizan-ai/` — Arabic-first React/Vite web app
-- `artifacts/api-server/src/routes/mizan.ts` — authenticated finance and profile API
-- `artifacts/api-server/src/lib/mongo.ts` — MongoDB connection and document types
-- `artifacts/api-server/src/lib/auth.ts` — signed HTTP-only session cookies
+- `artifacts/mizan-ai/` — Arabic-first Next.js app; UI pages and `/api/*` handlers
+- `lib/mizan-api/` — shared authenticated finance API, MongoDB access, and signed HTTP-only sessions
+- `artifacts/api-server/` — Express adapter used by the Replit compatibility route
 - `lib/api-spec/openapi.yaml` — source of truth for API contracts and generated clients
 
 ## Architecture decisions

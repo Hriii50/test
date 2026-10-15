@@ -1,6 +1,9 @@
+'use client';
+
 import { type FormEvent, type ReactNode, useMemo, useState } from 'react';
+import Link from 'next/link';
+import { usePathname, useRouter } from 'next/navigation';
 import { QueryClient, QueryClientProvider, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Link, Route, Switch, useLocation, Router as WouterRouter } from 'wouter';
 import {
   Activity, ArrowDownLeft, ArrowLeft, ArrowUpLeft, CalendarDays,
   Check, ChevronLeft, CircleDollarSign, CreditCard, Edit3, Eye,
@@ -30,17 +33,19 @@ import {
   AddAction, Button, Currency, EmptyState, ErrorState, Field, FormActions,
   FormError, FormWrapper, LoadingState, Modal, PageTitle, Panel, Shell,
 } from '@/components/mizan-ui';
-import NotFound from '@/pages/not-found';
-import '@/index.css';
+import NotFound from '@/components/not-found';
 
-const queryClient = new QueryClient({
-  defaultOptions: { queries: { retry: 1, refetchOnWindowFocus: false, staleTime: 20_000 } },
-});
 const request = { credentials: 'include' as const };
 const today = () => new Date().toISOString().slice(0, 10);
 const thisMonth = () => new Date().toISOString().slice(0, 7);
 const dateLabel = (date?: string | null) => date ? new Intl.DateTimeFormat('ar-KW', { day: 'numeric', month: 'short', year: 'numeric' }).format(new Date(date)) : 'غير محدد';
 const percent = (n: number) => `${Math.round(n)}٪`;
+
+function useLocation(): [string, (path: string) => void] {
+  const pathname = usePathname() || '/';
+  const router = useRouter();
+  return [pathname, (path) => router.push(path)];
+}
 
 function BrandMark({ size = 'normal' }: { size?: 'normal' | 'large' }) {
   return <Link href="/" data-testid="link-brand-home" className="inline-flex items-center gap-3">
@@ -112,6 +117,7 @@ function AuthPage({ mode }: { mode: 'login' | 'signup' }) {
 
 function Guarded({ children }: { children: (user: User) => ReactNode }) {
   const [, setLocation] = useLocation();
+  const queryClient = useQueryClient();
   const { data: user, isLoading, isError, refetch } = useGetCurrentUser({ request });
   if (isLoading) return <main dir="rtl" className="min-h-[100dvh] p-5 sm:p-10"><div className="mx-auto max-w-6xl"><LoadingState /></div></main>;
   if (isError || !user) return <main dir="rtl" className="grid min-h-[100dvh] place-items-center bg-background p-5"><Panel className="max-w-md p-8 text-center"><div className="mx-auto grid size-14 place-items-center rounded-2xl bg-emerald-50 text-emerald-800"><ShieldCheck size={25} /></div><h1 className="mt-4 text-xl font-bold text-secondary">مساحتك بانتظارك</h1><p className="mt-2 text-sm leading-6 text-muted-foreground">سجّل الدخول للوصول إلى بياناتك المالية الشخصية.</p><Link href="/login" className="mt-5 inline-flex min-h-11 items-center gap-2 rounded-xl bg-emerald-700 px-5 text-sm font-semibold text-white" data-testid="link-guard-login">تسجيل الدخول <ArrowLeft size={16} /></Link><button className="mt-3 block w-full text-xs text-muted-foreground underline" onClick={() => refetch()} data-testid="button-check-session">إعادة المحاولة</button></Panel></main>;
@@ -267,23 +273,50 @@ function OrdersRoute() { return <Guarded>{(user) => <Orders user={user} />}</Gua
 function ProfileRoute() { return <Guarded>{(user) => <Profile user={user} />}</Guarded>; }
 
 function RoutedApp() {
-  return <RoutedErrorBoundary><Switch>
-    <Route path="/" component={Landing} />
-    <Route path="/signup" component={() => <AuthPage mode="signup" />} />
-    <Route path="/login" component={() => <AuthPage mode="login" />} />
-    <Route path="/dashboard" component={DashboardRoute} />
-    <Route path="/transactions" component={TransactionsRoute} />
-    <Route path="/budgets" component={BudgetsRoute} />
-    <Route path="/goals" component={GoalsRoute} />
-    <Route path="/advisor" component={AdvisorRoute} />
-    <Route path="/orders" component={OrdersRoute} />
-    <Route path="/profile" component={ProfileRoute} />
-    <Route component={NotFound} />
-  </Switch></RoutedErrorBoundary>;
+  const [path] = useLocation();
+  let page: ReactNode;
+  switch (path) {
+    case '/':
+      page = <Landing />;
+      break;
+    case '/signup':
+      page = <AuthPage mode="signup" />;
+      break;
+    case '/login':
+      page = <AuthPage mode="login" />;
+      break;
+    case '/dashboard':
+      page = <DashboardRoute />;
+      break;
+    case '/transactions':
+      page = <TransactionsRoute />;
+      break;
+    case '/budgets':
+      page = <BudgetsRoute />;
+      break;
+    case '/goals':
+      page = <GoalsRoute />;
+      break;
+    case '/advisor':
+      page = <AdvisorRoute />;
+      break;
+    case '/orders':
+      page = <OrdersRoute />;
+      break;
+    case '/profile':
+      page = <ProfileRoute />;
+      break;
+    default:
+      page = <NotFound />;
+  }
+  return <RoutedErrorBoundary>{page}</RoutedErrorBoundary>;
 }
 
 function App() {
-  return <QueryClientProvider client={queryClient}><TooltipProvider><WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, '')}><RoutedApp /></WouterRouter><Toaster /></TooltipProvider></QueryClientProvider>;
+  const [queryClient] = useState(() => new QueryClient({
+    defaultOptions: { queries: { retry: 1, refetchOnWindowFocus: false, staleTime: 20_000 } },
+  }));
+  return <QueryClientProvider client={queryClient}><TooltipProvider><RoutedApp /><Toaster /></TooltipProvider></QueryClientProvider>;
 }
 
 export default App;

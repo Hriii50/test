@@ -1,5 +1,6 @@
 import { type ChangeEvent, type FormEvent, type ReactNode, useState } from 'react';
-import { Link, useLocation } from 'wouter';
+import Link from 'next/link';
+import { usePathname, useRouter } from 'next/navigation';
 import {
   ArrowUpLeft, ChevronLeft, CircleHelp, CreditCard, LayoutDashboard, LogOut,
   Menu, Plus, Settings2, Sparkles, Target, Wallet, X,
@@ -91,7 +92,8 @@ export function Currency({ value, currency = 'KWD', compact = false }: { value: 
 }
 
 export function Shell({ user, onLogout, children }: { user: User; onLogout: () => void; children: ReactNode }) {
-  const [path, setLocation] = useLocation();
+  const path = usePathname() || '/';
+  const router = useRouter();
   const [mobileOpen, setMobileOpen] = useState(false);
   const initials = user.name.trim().split(/\s+/).slice(0, 2).map((w) => w[0]).join('');
   const navigation = <div className="flex h-full flex-col">
@@ -121,7 +123,7 @@ export function Shell({ user, onLogout, children }: { user: User; onLogout: () =
     <main className="min-w-0 flex-1 pb-20 md:pb-0">
       <header className="sticky top-0 z-20 flex h-[72px] items-center justify-between border-b border-border/75 bg-background/90 px-4 backdrop-blur-lg sm:px-7 lg:px-10">
         <div className="flex items-center gap-3"><IconButton label="فتح القائمة" onClick={() => setMobileOpen(true)} testId="button-open-menu"><Menu size={20} /></IconButton><div className="hidden text-xs text-muted-foreground sm:block">مساء الخير، <span className="font-semibold text-secondary">{user.name.split(' ')[0]}</span></div></div>
-        <div className="flex items-center gap-2"><span className="hidden items-center gap-2 rounded-full border border-border bg-card px-3 py-2 text-xs text-muted-foreground sm:flex"><span className="size-1.5 rounded-full bg-emerald-600" /> بياناتك محفوظة بأمان</span><IconButton label="الملف الشخصي" testId="button-profile" onClick={() => setLocation('/profile')}><Settings2 size={18} /></IconButton></div>
+         <div className="flex items-center gap-2"><span className="hidden items-center gap-2 rounded-full border border-border bg-card px-3 py-2 text-xs text-muted-foreground sm:flex"><span className="size-1.5 rounded-full bg-emerald-600" /> بياناتك محفوظة بأمان</span><IconButton label="الملف الشخصي" testId="button-profile" onClick={() => router.push('/profile')}><Settings2 size={18} /></IconButton></div>
       </header>
       <div className="mx-auto w-full max-w-[1440px] px-4 py-7 sm:px-7 lg:px-10 lg:py-9">{children}</div>
     </main>
