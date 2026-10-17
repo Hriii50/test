@@ -26,6 +26,8 @@ export async function getDatabase(): Promise<Db> {
         database.collection("budgets").createIndex({ userId: 1, month: 1, category: 1 }),
         database.collection("goals").createIndex({ userId: 1 }),
         database.collection("orders").createIndex({ userId: 1, date: -1 }),
+        database.collection("payments").createIndex({ stripeSessionId: 1 }, { unique: true }),
+        database.collection("payments").createIndex({ userId: 1, createdAt: -1 }),
       ]);
       return connected;
     }).catch((error: unknown) => {
@@ -81,6 +83,17 @@ export type OrderDocument = Document & {
   category: string;
   status: "paid" | "pending";
   note: string | null;
+};
+
+export type PaymentDocument = Document & {
+  userId: string;
+  stripeSessionId: string;
+  stripePaymentIntentId: string | null;
+  stripePriceId: string;
+  amount: number;
+  currency: string;
+  status: "paid";
+  createdAt: string;
 };
 
 export function publicDocument<T extends Document>(

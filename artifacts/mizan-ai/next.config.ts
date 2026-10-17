@@ -14,7 +14,7 @@ const nextConfig: NextConfig = {
     "@workspace/api-zod",
     "@workspace/mizan-api",
   ],
-  serverExternalPackages: ["bcryptjs", "mongodb"],
+  serverExternalPackages: ["bcryptjs", "mongodb", "stripe"],
 };
 
 export default nextConfig;

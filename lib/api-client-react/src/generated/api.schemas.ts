@@ -55,6 +55,54 @@ export interface ProfileUpdate {
   email: string;
 }
 
+export interface BillingPrice {
+  name: string;
+  /** @nullable */
+  description: string | null;
+  /** @minimum 1 */
+  amount: number;
+  /**
+     * @minLength 3
+     * @maxLength 3
+     */
+  currency: string;
+}
+
+export interface CheckoutInput { [key: string]: unknown }
+
+export interface CheckoutSession {
+  url: string;
+}
+
+export type BillingSessionStatus = typeof BillingSessionStatus[keyof typeof BillingSessionStatus];
+
+
+export const BillingSessionStatus = {
+  paid: 'paid',
+  processing: 'processing',
+  unpaid: 'unpaid',
+} as const;
+
+export interface BillingSession {
+  status: BillingSessionStatus;
+  /**
+     * @minimum 0
+     * @nullable
+     */
+  amount: number | null;
+  /**
+     * @minLength 3
+     * @maxLength 3
+     * @nullable
+     */
+  currency: string | null;
+}
+
+export const WebhookAckValue = {
+  received: true,
+} as const;
+export type WebhookAck = typeof WebhookAckValue;
+
 export type TransactionType = typeof TransactionType[keyof typeof TransactionType];
 
 
@@ -266,4 +314,12 @@ export interface AdvisorResponse {
  * Request error
  */
 export type ErrorResponseResponse = ErrorResponse;
+
+export type GetBillingSessionParams = {
+/**
+ * @minLength 10
+ * @maxLength 255
+ */
+session_id: string;
+};
 

@@ -392,3 +392,66 @@ export const UpdateProfileResponse = zod.object({
 })
 
 
+/**
+ * @summary Get the configured one-time checkout item
+ */
+
+export const getBillingPriceResponseCurrencyMin = 3;
+export const getBillingPriceResponseCurrencyMax = 3;
+
+
+
+export const GetBillingPriceResponse = zod.object({
+  "name": zod.string(),
+  "description": zod.string().nullable(),
+  "amount": zod.number().int().min(1),
+  "currency": zod.string().min(getBillingPriceResponseCurrencyMin).max(getBillingPriceResponseCurrencyMax)
+})
+
+
+/**
+ * @summary Start a one-time Stripe Checkout session
+ */
+export const CreateBillingCheckoutBody = zod.object({
+
+})
+
+export const CreateBillingCheckoutResponse = zod.object({
+  "url": zod.string().url()
+})
+
+
+/**
+ * @summary Verify the current user's Stripe Checkout session
+ */
+export const getBillingSessionQuerySessionIdMin = 10;
+export const getBillingSessionQuerySessionIdMax = 255;
+
+
+
+export const GetBillingSessionQueryParams = zod.object({
+  "session_id": zod.coerce.string().min(getBillingSessionQuerySessionIdMin).max(getBillingSessionQuerySessionIdMax)
+})
+
+export const getBillingSessionResponseAmountMin = 0;
+
+export const getBillingSessionResponseCurrencyMin = 3;
+export const getBillingSessionResponseCurrencyMax = 3;
+
+
+
+export const GetBillingSessionResponse = zod.object({
+  "status": zod.enum(['paid', 'processing', 'unpaid']),
+  "amount": zod.number().int().min(getBillingSessionResponseAmountMin).nullable(),
+  "currency": zod.string().min(getBillingSessionResponseCurrencyMin).max(getBillingSessionResponseCurrencyMax).nullable()
+})
+
+
+/**
+ * @summary Receive signed Stripe payment events
+ */
+export const ReceiveStripeWebhookResponse = zod.object({
+  "received": zod.literal(true)
+})
+
+

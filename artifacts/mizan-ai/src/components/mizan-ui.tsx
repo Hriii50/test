@@ -2,7 +2,7 @@ import { type ChangeEvent, type FormEvent, type ReactNode, useState } from 'reac
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import {
-  ArrowUpLeft, ChevronLeft, CircleHelp, CreditCard, LayoutDashboard, LogOut,
+  ArrowUpLeft, ChevronLeft, CircleDollarSign, CircleHelp, CreditCard, LayoutDashboard, LogOut,
   Menu, Plus, Settings2, Sparkles, Target, Wallet, X,
 } from 'lucide-react';
 import type { User } from '@workspace/api-client-react';
@@ -14,6 +14,7 @@ export const routes = [
   { href: '/goals', label: 'أهداف الادخار', icon: Target },
   { href: '/advisor', label: 'المستشار المالي', icon: Sparkles },
   { href: '/orders', label: 'الالتزامات', icon: CreditCard },
+  { href: '/payment', label: 'الدفع', icon: CircleDollarSign },
 ];
 
 export function Button({

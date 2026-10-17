@@ -1,6 +1,10 @@
+import { Buffer } from "node:buffer";
+import type Stripe from "stripe";
 import bcrypt from "bcryptjs";
 import { ObjectId } from "mongodb";
 import {
+  CreateBillingCheckoutBody,
+  CreateBillingCheckoutResponse,
   CreateBudgetBody,
   CreateBudgetResponse,
   CreateGoalBody,
@@ -15,6 +19,9 @@ import {
   DeleteGoalResponse,
   DeleteTransactionParams,
   DeleteTransactionResponse,
+  GetBillingPriceResponse,
+  GetBillingSessionQueryParams,
+  GetBillingSessionResponse,
   GetCurrentUserResponse,
   GetDashboardResponse,
   GetFinancialAdviceResponse,
@@ -29,6 +36,7 @@ import {
   LogoutUserResponse,
   RegisterUserBody,
   RegisterUserResponse,
+  ReceiveStripeWebhookResponse,
   UpdateBudgetBody,
   UpdateBudgetParams,
   UpdateBudgetResponse,
@@ -50,6 +58,14 @@ import type {
 } from "./mongo";
 import { getDatabase, publicDocument } from "./mongo";
 import { clearedSessionCookie, getSessionUserId, issueSession, sessionCookie } from "./auth";
+import {
+  getConfiguredPrice,
+  getStripeGateway,
+  getStripePriceId,
+  getStripeWebhookSecret,
+  recordPaidCheckout,
+  type StripeGateway,
+} from "./billing";
 
 type SafeSchema<T> = {
   safeParse(value: unknown):
@@ -60,6 +76,10 @@ type SafeSchema<T> = {
 type MizanApiDependencies = {
   getDatabase: typeof getDatabase;
   issueSession: typeof issueSession;
+  getSessionUserId: typeof getSessionUserId;
+  getStripeGateway: () => StripeGateway | null;
+  getStripePriceId: () => string | null;
+  getStripeWebhookSecret: () => string | null;
 };
 
 function json(body: unknown, status = 200, cookie?: string): Response {
@@ -118,6 +138,28 @@ function normalizePath(pathname: string): string {
   return path.startsWith("/api/") ? path.slice(4) : path;
 }
 
+function forwardedOrigin(request: Request): string {
+  const url = new URL(request.url);
+  const host = request.headers.get("x-forwarded-host")?.split(",")[0]?.trim()
+    || request.headers.get("host")
+    || url.host;
+  const protocol = request.headers.get("x-forwarded-proto")?.split(",")[0]?.trim()
+    || url.protocol.slice(0, -1);
+  return new URL(`${protocol}://${host}`).origin;
+}
+
+function hasSameOrigin(request: Request): boolean {
+  const requestOrigin = request.headers.get("origin");
+  if (!requestOrigin) return false;
+  try {
+    const trustedOrigin = new URL(forwardedOrigin(request));
+    if (process.env.NODE_ENV === "production" && trustedOrigin.protocol !== "https:") return false;
+    return new URL(requestOrigin).origin === trustedOrigin.origin;
+  } catch {
+    return false;
+  }
+}
+
 function dateNow(): string {
   return new Date().toISOString();
 }
@@ -163,12 +205,68 @@ function validatedId(
   return parsed.success && ObjectId.isValid(parsed.data.id) ? parsed.data.id : null;
 }
 
+async function handleStripeWebhook(
+  request: Request,
+  dependencies: MizanApiDependencies,
+): Promise<Response> {
+  const stripe = dependencies.getStripeGateway();
+  const webhookSecret = dependencies.getStripeWebhookSecret();
+  const priceId = dependencies.getStripePriceId();
+  if (!stripe || !webhookSecret || !priceId) {
+    return error("إعداد الدفع غير مكتمل", 503);
+  }
+
+  const signature = request.headers.get("stripe-signature");
+  if (!signature) return error("توقيع Stripe مفقود", 400);
+  const declaredLength = Number(request.headers.get("content-length") ?? 0);
+  if (declaredLength > 1024 * 1024) return error("حجم الطلب أكبر من المسموح", 413);
+
+  let payload: Buffer;
+  try {
+    payload = Buffer.from(await request.arrayBuffer());
+  } catch {
+    return error("بيانات Stripe غير صالحة", 400);
+  }
+  if (payload.byteLength > 1024 * 1024) return error("حجم الطلب أكبر من المسموح", 413);
+
+  let event: Stripe.Event;
+  try {
+    event = stripe.webhooks.constructEvent(payload, signature, webhookSecret);
+  } catch {
+    return error("توقيع Stripe غير صالح", 400);
+  }
+
+  if (
+    event.type === "checkout.session.completed" ||
+    event.type === "checkout.session.async_payment_succeeded"
+  ) {
+    const checkoutSession = event.data.object as Stripe.Checkout.Session;
+    if (
+      checkoutSession.metadata?.mizanApp === "mizan" &&
+      checkoutSession.payment_status === "paid"
+    ) {
+      const recorded = await recordPaidCheckout(
+        await dependencies.getDatabase(),
+        checkoutSession,
+        priceId,
+      );
+      if (!recorded) return error("تعذّر تسجيل الدفعة", 500);
+    }
+  }
+
+  return json(ReceiveStripeWebhookResponse.parse({ received: true }));
+}
+
 async function handlePublicRoute(
   request: Request,
   path: string,
   dependencies: MizanApiDependencies,
 ): Promise<Response | null> {
   const method = request.method.toUpperCase();
+
+  if (method === "POST" && path === "/webhooks/stripe") {
+    return handleStripeWebhook(request, dependencies);
+  }
 
   if (method === "GET" && path === "/healthz") {
     return json(HealthCheckResponse.parse({ status: "ok" }));
@@ -240,6 +338,104 @@ async function handleAuthenticatedRoute(
 ): Promise<Response> {
   const method = request.method.toUpperCase();
   const db = await dependencies.getDatabase();
+
+  if (path === "/billing/price" && method === "GET") {
+    const stripe = dependencies.getStripeGateway();
+    const priceId = dependencies.getStripePriceId();
+    if (!stripe || !priceId) return error("إعداد الدفع غير مكتمل", 503);
+    try {
+      const price = await getConfiguredPrice(stripe, priceId);
+      if (!price) return error("لم يتم إعداد سعر دفع لمرة واحدة", 503);
+      return json(GetBillingPriceResponse.parse(price));
+    } catch {
+      return error("تعذّر تحميل تفاصيل الدفع", 503);
+    }
+  }
+
+  if (path === "/billing/checkout" && method === "POST") {
+    if (!hasSameOrigin(request)) return error("الطلب غير صالح", 403);
+    const parsed = await parseInput(request, CreateBillingCheckoutBody);
+    if ("response" in parsed) return parsed.response;
+
+    const stripe = dependencies.getStripeGateway();
+    const priceId = dependencies.getStripePriceId();
+    if (!stripe || !priceId) return error("إعداد الدفع غير مكتمل", 503);
+
+    const user = await db.collection<UserDocument>("users").findOne({
+      _id: new ObjectId(userId),
+    });
+    if (!user) return error("الحساب غير موجود", 404);
+
+    try {
+      const price = await getConfiguredPrice(stripe, priceId);
+      if (!price) return error("لم يتم إعداد سعر دفع لمرة واحدة", 503);
+
+      const origin = forwardedOrigin(request);
+      const checkoutSession = await stripe.checkout.sessions.create({
+        mode: "payment",
+        line_items: [{ price: priceId, quantity: 1 }],
+        customer_email: user.email,
+        client_reference_id: userId,
+        metadata: { mizanApp: "mizan", userId, priceId },
+        payment_intent_data: {
+          metadata: { mizanApp: "mizan", userId, priceId },
+        },
+        success_url: `${origin}/payment?session_id={CHECKOUT_SESSION_ID}`,
+        cancel_url: `${origin}/payment?canceled=1`,
+      });
+      if (!checkoutSession.url) return error("تعذّر بدء عملية الدفع", 502);
+      return json(CreateBillingCheckoutResponse.parse({ url: checkoutSession.url }));
+    } catch {
+      return error("تعذّر بدء عملية الدفع. حاول مرة أخرى.", 502);
+    }
+  }
+
+  if (path === "/billing/session" && method === "GET") {
+    const params = GetBillingSessionQueryParams.safeParse({
+      session_id: new URL(request.url).searchParams.get("session_id"),
+    });
+    if (!params.success || !/^cs_(test|live)_[A-Za-z0-9]+$/.test(params.data.session_id)) {
+      return error("جلسة الدفع غير صالحة", 400);
+    }
+
+    const stripe = dependencies.getStripeGateway();
+    const priceId = dependencies.getStripePriceId();
+    if (!stripe || !priceId) return error("إعداد الدفع غير مكتمل", 503);
+
+    let checkoutSession: Stripe.Checkout.Session;
+    try {
+      checkoutSession = await stripe.checkout.sessions.retrieve(params.data.session_id);
+    } catch {
+      return error("جلسة الدفع غير موجودة", 404);
+    }
+
+    if (
+      checkoutSession.mode !== "payment" ||
+      checkoutSession.metadata?.mizanApp !== "mizan" ||
+      checkoutSession.metadata.userId !== userId ||
+      checkoutSession.metadata.priceId !== priceId
+    ) {
+      return error("جلسة الدفع غير موجودة", 404);
+    }
+
+    if (
+      checkoutSession.payment_status === "paid" &&
+      !await recordPaidCheckout(db, checkoutSession, priceId)
+    ) {
+      return error("تعذّر تأكيد الدفع", 500);
+    }
+
+    const status = checkoutSession.payment_status === "paid"
+      ? "paid"
+      : checkoutSession.status === "complete"
+        ? "processing"
+        : "unpaid";
+    return json(GetBillingSessionResponse.parse({
+      status,
+      amount: checkoutSession.amount_total,
+      currency: checkoutSession.currency?.toUpperCase() ?? null,
+    }));
+  }
 
   if (method === "GET" && path === "/auth/me") {
     const user = await db.collection<UserDocument>("users").findOne({ _id: new ObjectId(userId) });
@@ -588,6 +784,10 @@ export function createMizanApiHandler(overrides: Partial<MizanApiDependencies> =
   const dependencies: MizanApiDependencies = {
     getDatabase,
     issueSession,
+    getSessionUserId,
+    getStripeGateway,
+    getStripePriceId,
+    getStripeWebhookSecret,
     ...overrides,
   };
 
@@ -597,7 +797,7 @@ export function createMizanApiHandler(overrides: Partial<MizanApiDependencies> =
       const publicResponse = await handlePublicRoute(request, path, dependencies);
       if (publicResponse) return publicResponse;
 
-      const session = await getSessionUserId(request);
+      const session = await dependencies.getSessionUserId(request);
       if (!session.userId) {
         return json(
           { error: session.invalid ? "انتهت صلاحية الجلسة" : "تسجيل الدخول مطلوب" },

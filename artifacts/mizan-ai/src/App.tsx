@@ -27,6 +27,7 @@ import {
 } from '@workspace/api-client-react';
 import type { Budget, Order, SavingsGoal, Transaction, User } from '@workspace/api-client-react';
 import { ErrorBoundary } from '@/components/error-boundary';
+import { PaymentPage } from '@/components/payment-page';
 import { Toaster } from '@/components/ui/toaster';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import {
@@ -316,6 +317,7 @@ function GoalsRoute() { return <Guarded>{(user) => <Goals user={user} />}</Guard
 function AdvisorRoute() { return <Guarded>{() => <Advisor />}</Guarded>; }
 function OrdersRoute() { return <Guarded>{(user) => <Orders user={user} />}</Guarded>; }
 function ProfileRoute() { return <Guarded>{(user) => <Profile user={user} />}</Guarded>; }
+function PaymentRoute() { return <Guarded>{() => <PaymentPage />}</Guarded>; }
 
 function RoutedApp() {
   const [path] = useLocation();
@@ -347,6 +349,9 @@ function RoutedApp() {
       break;
     case '/orders':
       page = <OrdersRoute />;
+      break;
+    case '/payment':
+      page = <PaymentRoute />;
       break;
     case '/profile':
       page = <ProfileRoute />;

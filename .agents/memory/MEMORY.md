@@ -1,1 +1,2 @@
 - [MIZAN auth credential logging](mizan-auth-credential-logging.md) — Never put auth fields in URLs or request logs; sign-in and sign-up must use POST bodies.
+- [MIZAN Stripe setup](mizan-stripe-deployment.md) — Keep one-time Stripe billing on Vercel with the existing MongoDB; set the Price ID server-side.
