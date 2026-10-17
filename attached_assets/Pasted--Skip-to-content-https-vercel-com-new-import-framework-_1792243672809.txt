@@ -1,0 +1,58 @@
+[Skip to content](https://vercel.com/new/import?framework=services&hasTrialAvailable=1&id=1420905107&import-source=import-suggestions&name=test&owner=Hriii50&provider=github&remainingProjects=3&s=https%3A%2F%2Fgithub.com%2FHriii50%2Ftest&teamSlug=hoor11&totalProjects=3&deploymentIds=dpl_863ypBd3pPfkUdwhH6xVDvMXGMg7#geist-skip-nav)
+New Project
+
+Avatar for om72mood-3554
+New Project
+importing from GitHub
+
+[Hriii50/test](https://github.com/Hriii50/test)
+[main](https://github.com/Hriii50/test)
+[artifacts/mizan-ai](https://github.com/Hriii50/test)
+Choose where you want to create the project and give it a name.
+
+Vercel Team
+
+hoor
+Hobby
+Project Name
+test-79dn
+Root Directory
+
+artifacts/mizan-ai
+Application Preset
+Framework logo
+Next.js
+Deployment
+Deployment failed with error.
+Build Logs
+42s
+152 lines
+
+2
+Find in logs
+Ctrl
+F
+> @workspace/mizan-ai@0.0.0 build /vercel/path0/artifacts/mizan-ai
+> next build
+▲ Next.js 16.4.0 (Turbopack)
+  Applying modifyConfig from Vercel
+✓ Running next.config.ts took 150ms
+Attention: Next.js now collects completely anonymous telemetry regarding usage.
+This information is used to shape Next.js' roadmap and prioritize features.
+You can learn more, including how to opt-out if you'd not like to participate in this anonymous program, by visiting the following URL:
+https://nextjs.org/telemetry
+  Creating an optimized production build ...
+✓ Compiled successfully in 8.2s
+  Running TypeScript ...
+app/api/[[...segments]]/route.ts(1,32): error TS6305: Output file '/vercel/path0/lib/mizan-api/dist/index.d.ts' has not been built from source file '/vercel/path0/lib/mizan-api/src/index.ts'.
+src/App.tsx(27,8): error TS6305: Output file '/vercel/path0/lib/api-client-react/dist/index.d.ts' has not been built from source file '/vercel/path0/lib/api-client-react/src/index.ts'.
+src/App.tsx(28,68): error TS6305: Output file '/vercel/path0/lib/api-client-react/dist/index.d.ts' has not been built from source file '/vercel/path0/lib/api-client-react/src/index.ts'.
+src/App.tsx(147,44): error TS2345: Argument of type '{ data: { name: string; email: string; password: string; }; }' is not assignable to parameter of type 'void'.
+src/App.tsx(148,23): error TS2345: Argument of type '{ data: { email: string; password: string; }; }' is not assignable to parameter of type 'void'.
+Deployment Summary
+Deployment Checks
+Assigning Custom Domains
+Add image asset and update package metadata - 0addb8
+Tip: Drag and drop a folder to deploy a new project without a Git repository.
+Import a different Git Repository →
+Browse Templates →
