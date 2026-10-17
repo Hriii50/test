@@ -18,3 +18,8 @@ expertMode = true
 [postMerge]
 path = "scripts/post-merge.sh"
 timeoutMs = 20000
+
+[userenv]
+
+[userenv.development]
+STRIPE_PRICE_ID = "price_1URYgQKfsMR1cxEbYfPK7kfO"
